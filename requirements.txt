@@ -1,0 +1,5 @@
+# 本地操作
+echo "fastapi" > requirements.txt
+git add requirements.txt
+git commit -m "add requirements.txt"
+git push origin main
