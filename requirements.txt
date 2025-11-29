@@ -1,5 +1,7 @@
-# 本地操作
-echo "fastapi" > requirements.txt
-git add requirements.txt
-git commit -m "add requirements.txt"
-git push origin main
+cat > requirements.txt <<EOF
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+yt-dlp==2024.11.18
+python-dotenv==1.0.1
+httpx==0.27.0
+EOF
