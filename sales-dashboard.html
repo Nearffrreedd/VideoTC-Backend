@@ -131,7 +131,7 @@
       <p><strong>Excel 格式要求：</strong> 第一行必须包含列名，且包含以下三列（顺序不限）：</p>
       <ul>
         <li><code>product_id</code></li>
-        <li><code>date_str</code>（格式：YYYY-MM-DD）</li>
+        <li><code>date</code>（格式：YYYY-MM-DD）</li>
         <li><code>sales</code>（整数）</li>
       </ul>
     </div>
@@ -187,13 +187,13 @@
         <tr>
           <td>${item.id || ''}</td>
           <td>${item.product_id || ''}</td>
-          <td>${item.date_str || ''}</td>
+          <td>${item.date || ''}</td>
           <td>${item.sales || 0}</td>
         </tr>
       `).join('');
     }
 
-    // ✅ 修复：导出使用 currentData，并加安全检查
+    // 导出 Excel
     function exportToXLSX() {
       if (!Array.isArray(currentData) || currentData.length === 0) {
         showMessage('没有数据可导出', 'error');
@@ -204,7 +204,7 @@
         const wsData = currentData.map(row => ({
           ID: row.id,
           product_id: row.product_id,
-          date_str: row.date_str,
+          date: row.date,
           sales: row.sales
         }));
 
@@ -218,10 +218,10 @@
       }
     }
 
-    // ✨ 新增：下载导入模板
+    // 下载导入模板（使用 date 字段）
     function downloadTemplate() {
       const templateData = [
-        { product_id: "示例产品ID", date_str: "2025-12-01", sales: 100 }
+        { product_id: "示例产品ID", date: "2025-12-01", sales: 100 }
       ];
       const ws = XLSX.utils.json_to_sheet(templateData);
       const wb = XLSX.utils.book_new();
@@ -229,7 +229,7 @@
       XLSX.writeFile(wb, "sales_import_template.xlsx");
     }
 
-    // 导入逻辑（保持不变，已健壮）
+    // 导入逻辑
     document.getElementById('xlsx-file').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -243,9 +243,9 @@
         if (jsonData.length < 2) throw new Error('文件为空或格式无效');
 
         const headers = jsonData[0].map(h => String(h).trim());
-        const required = ['product_id', 'date_str', 'sales'];
+        const required = ['product_id', 'date', 'sales']; // 注意：现在是 'date'
         if (!required.every(r => headers.includes(r))) {
-          throw new Error('缺少必要列: product_id, date_str, sales');
+          throw new Error('缺少必要列: product_id, date, sales');
         }
 
         const records = [];
@@ -258,8 +258,8 @@
             record[h] = row[idx] !== undefined ? String(row[idx]).trim() : '';
           });
 
-          if (record.product_id && record.date_str && record.sales !== '') {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date_str)) {
+          if (record.product_id && record.date && record.sales !== '') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) {
               throw new Error(`第 ${i+1} 行：日期格式错误（应为 YYYY-MM-DD）`);
             }
             const salesNum = Number(record.sales);
@@ -274,9 +274,9 @@
         if (records.length === 0) throw new Error('未找到有效数据行');
 
         for (const rec of records) {
-          const url = `${API_BASE}/sales/?product_id=${encodeURIComponent(rec.product_id)}&date_str=${encodeURIComponent(rec.date_str)}&sales=${encodeURIComponent(rec.sales)}`;
+          const url = `${API_BASE}/sales/?product_id=${encodeURIComponent(rec.product_id)}&date_str=${encodeURIComponent(rec.date)}&sales=${encodeURIComponent(rec.sales)}`;
           const res = await fetch(url, { method: 'POST' });
-          if (!res.ok) throw new Error(`导入失败: ${rec.product_id} ${rec.date_str}`);
+          if (!res.ok) throw new Error(`导入失败: ${rec.product_id} ${rec.date}`);
         }
 
         showMessage(`成功导入 ${records.length} 条记录`, 'success');
