@@ -1,8 +1,3 @@
-# 备份旧文件（可选）
-cp main.py main.py.bak
-
-# 用干净的内容重写 main.py
-cat > main.py << 'EOF'
 # main.py
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +16,7 @@ app = FastAPI(title="VideoTC Backend", description="电商销量数据 API")
 # 配置 CORS（允许前端跨域访问）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # 生产环境应替换为你的前端域名，如 ["https://your-frontend.com"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,4 +119,3 @@ def delete_sale(sale_id: int, db: Session = Depends(get_db)):
     db.delete(db_sale)
     db.commit()
     return {"message": "删除成功"}
-EOF
