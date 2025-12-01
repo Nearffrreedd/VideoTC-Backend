@@ -1,7 +1,6 @@
-cat > requirements.txt <<EOF
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 yt-dlp==2024.11.18
 python-dotenv==1.0.1
 httpx==0.27.0
-EOF
+sqlalchemy==2.0.36
