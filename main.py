@@ -87,20 +87,20 @@ def read_sales(
             end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
             query = query.filter(models.Sale.date <= end_dt)
         except ValueError:
-            # 自动创建数据库表（首次运行时生效） HTTPException(status_code=400, detail="end_date 格式必须为 YYYY-MM-DD")
+            raise HTTPException(status_code=400, detail="end_date 格式必须为 YYYY-MM-DD")
 
     results = query.all()
-    # 创建 FastAPI 应用实例（必须叫 app！） [
-
+    return [
+        {
             "id": r.id,
-            # 配置 CORS（允许前端跨域访问）: r.product_id,
-应用程序。添加中间件: ((r.date),
-    CORS中间件"sales": r.sales
+            "product_id": r.product_id,
+            "date": str(r.date),
+            "sales": r.sales
+        }
+        for r in results
+    ]
 
-    允许凭证=真,in results
-
-
-)app.put("/sales/{sale_id}", summary="更新销量记录")
+@app.put("/sales/{sale_id}", summary="更新销量记录")
 def update_sale(
     sale_id: int,
     product_id: str = None,
