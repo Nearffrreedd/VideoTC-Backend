@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>VideoTC 销量管理（Excel版）</title>
-  <!-- 引入 SheetJS -->
+  <!-- SheetJS CDN -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
     body {
@@ -44,6 +44,12 @@
     button:hover {
       background: #45a049;
     }
+    .btn-blue {
+      background: #2196F3;
+    }
+    .btn-blue:hover {
+      background: #1976D2;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -56,35 +62,15 @@
     }
     th {
       background-color: #f2f2f2;
-      cursor: pointer;
-      user-select: none;
-    }
-    th:hover {
-      background-color: #e9e9e9;
     }
     .actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       margin-top: 15px;
     }
-    .import-section {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #eee;
-    }
     .file-input {
       display: none;
-    }
-    .file-label {
-      display: inline-block;
-      padding: 8px 16px;
-      background: #2196F3;
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .file-label:hover {
-      background: #1976D2;
     }
     .status {
       margin-top: 10px;
@@ -93,6 +79,11 @@
     }
     .success { background: #d4edda; color: #155724; }
     .error { background: #f8d7da; color: #721c24; }
+    .import-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
   </style>
 </head>
 <body>
@@ -109,7 +100,7 @@
         <option value="asc">销量 ↑</option>
         <option value="desc">销量 ↓</option>
       </select>
-      <button onclick="fetchSales()">查询</button>
+      <button onclick="fetchAndRender()">查询</button>
     </div>
 
     <!-- 数据表格 -->
@@ -128,7 +119,8 @@
     <!-- 操作按钮 -->
     <div class="actions">
       <button onclick="exportToXLSX()">导出 Excel</button>
-      <label class="file-label" for="xlsx-file">导入 Excel</label>
+      <button class="btn-blue" onclick="downloadTemplate()">下载导入模板</button>
+      <label class="btn-blue" for="xlsx-file">导入 Excel</label>
       <input type="file" id="xlsx-file" class="file-input" accept=".xlsx,.xls" />
     </div>
 
@@ -142,24 +134,20 @@
         <li><code>date_str</code>（格式：YYYY-MM-DD）</li>
         <li><code>sales</code>（整数）</li>
       </ul>
-      <p>示例：</p>
-      <table border="1" cellpadding="5">
-        <tr><th>product_id</th><th>date_str</th><th>sales</th></tr>
-        <tr><td>1111</td><td>2025-11-30</td><td>10</td></tr>
-        <tr><td>2222</td><td>2025-12-01</td><td>10</td></tr>
-      </table>
     </div>
   </div>
 
   <script>
     const API_BASE = 'http://120.78.0.22:9999';
-    let allSales = [];
+    let currentData = []; // 当前显示的数据（用于导出）
 
-    async function fetchSales() {
+    // 统一入口：获取 + 渲染
+    async function fetchAndRender() {
       try {
         const product = document.getElementById('filter-product').value.trim();
         const startDate = document.getElementById('filter-start-date').value;
         const endDate = document.getElementById('filter-end-date').value;
+        const sortOrder = document.getElementById('sort-order').value;
 
         let url = `${API_BASE}/sales/`;
         const params = new URLSearchParams();
@@ -169,36 +157,147 @@
         if (params.toString()) url += '?' + params.toString();
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error('获取数据失败');
-        allSales = await res.json();
-        renderTable(allSales);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+
+        // 安全检查：确保是数组
+        if (!Array.isArray(data)) {
+          throw new Error('后端返回数据格式错误，应为数组');
+        }
+
+        // 排序
+        let sortedData = [...data];
+        if (sortOrder === 'asc') {
+          sortedData.sort((a, b) => (a.sales || 0) - (b.sales || 0));
+        } else if (sortOrder === 'desc') {
+          sortedData.sort((a, b) => (b.sales || 0) - (a.sales || 0));
+        }
+
+        currentData = sortedData;
+        renderTable(sortedData);
       } catch (err) {
+        console.error(err);
         showMessage('加载数据失败: ' + err.message, 'error');
       }
     }
 
     function renderTable(data) {
       const tbody = document.getElementById('sales-body');
-      const sortOrder = document.getElementById('sort-order').value;
-
-      if (sortOrder === 'asc') data.sort((a, b) => a.sales - b.sales);
-      else if (sortOrder === 'desc') data.sort((a, b) => b.sales - a.sales);
-
       tbody.innerHTML = data.map(item => `
         <tr>
-          <td>${item.id}</td>
-          <td>${item.product_id}</td>
-          <td>${item.date_str}</td>
-          <td>${item.sales}</td>
+          <td>${item.id || ''}</td>
+          <td>${item.product_id || ''}</td>
+          <td>${item.date_str || ''}</td>
+          <td>${item.sales || 0}</td>
         </tr>
       `).join('');
     }
 
-    // 导出为 Excel (.xlsx)
+    // ✅ 修复：导出使用 currentData，并加安全检查
     function exportToXLSX() {
-      if (allSales.length === 0) {
+      if (!Array.isArray(currentData) || currentData.length === 0) {
         showMessage('没有数据可导出', 'error');
         return;
       }
 
-      //
+      try {
+        const wsData = currentData.map(row => ({
+          ID: row.id,
+          product_id: row.product_id,
+          date_str: row.date_str,
+          sales: row.sales
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Sales");
+        XLSX.writeFile(wb, `sales_export_${new Date().toISOString().slice(0,10)}.xlsx`);
+      } catch (err) {
+        console.error(err);
+        showMessage('导出失败: ' + err.message, 'error');
+      }
+    }
+
+    // ✨ 新增：下载导入模板
+    function downloadTemplate() {
+      const templateData = [
+        { product_id: "示例产品ID", date_str: "2025-12-01", sales: 100 }
+      ];
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, "sales_import_template.xlsx");
+    }
+
+    // 导入逻辑（保持不变，已健壮）
+    document.getElementById('xlsx-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        if (jsonData.length < 2) throw new Error('文件为空或格式无效');
+
+        const headers = jsonData[0].map(h => String(h).trim());
+        const required = ['product_id', 'date_str', 'sales'];
+        if (!required.every(r => headers.includes(r))) {
+          throw new Error('缺少必要列: product_id, date_str, sales');
+        }
+
+        const records = [];
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (!row || row.length === 0) continue;
+
+          const record = {};
+          headers.forEach((h, idx) => {
+            record[h] = row[idx] !== undefined ? String(row[idx]).trim() : '';
+          });
+
+          if (record.product_id && record.date_str && record.sales !== '') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date_str)) {
+              throw new Error(`第 ${i+1} 行：日期格式错误（应为 YYYY-MM-DD）`);
+            }
+            const salesNum = Number(record.sales);
+            if (isNaN(salesNum) || salesNum < 0 || !Number.isInteger(salesNum)) {
+              throw new Error(`第 ${i+1} 行：销量必须是非负整数`);
+            }
+            record.sales = salesNum;
+            records.push(record);
+          }
+        }
+
+        if (records.length === 0) throw new Error('未找到有效数据行');
+
+        for (const rec of records) {
+          const url = `${API_BASE}/sales/?product_id=${encodeURIComponent(rec.product_id)}&date_str=${encodeURIComponent(rec.date_str)}&sales=${encodeURIComponent(rec.sales)}`;
+          const res = await fetch(url, { method: 'POST' });
+          if (!res.ok) throw new Error(`导入失败: ${rec.product_id} ${rec.date_str}`);
+        }
+
+        showMessage(`成功导入 ${records.length} 条记录`, 'success');
+        fetchAndRender(); // 刷新
+      } catch (err) {
+        console.error(err);
+        showMessage('导入失败: ' + err.message, 'error');
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    function showMessage(text, type) {
+      const el = document.getElementById('status-message');
+      el.textContent = text;
+      el.className = 'status ' + type;
+      setTimeout(() => el.textContent = '', 5000);
+    }
+
+    // 初始化
+    window.onload = fetchAndRender;
+  </script>
+</body>
+</html>
