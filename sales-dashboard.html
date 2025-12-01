@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VideoTC 销量管理</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    input, select, button {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #f2f2f2;
+      cursor: pointer;
+      user-select: none;
+    }
+    th:hover {
+      background-color: #e9e9e9;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .import-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    .file-input {
+      display: none;
+    }
+    .file-label {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #2196F3;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .file-label:hover {
+      background: #1976D2;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>VideoTC 销量数据看板</h1>
+
+    <!-- 筛选区 -->
+    <div class="filters">
+      <input type="text" id="filter-product" placeholder="产品ID" />
+      <input type="date" id="filter-start-date" />
+      <input type="date" id="filter-end-date" />
+      <select id="sort-order">
+        <option value="">销量排序</option>
+        <option value="asc">销量 ↑</option>
+        <option value="desc">销量 ↓</option>
+      </select>
+      <button onclick="fetchSales()">查询</button>
+    </div>
+
+    <!-- 数据表格 -->
+    <table id="sales-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>产品ID</th>
+          <th>日期</th>
+          <th>销量</th>
+        </tr>
+      </thead>
+      <tbody id="sales-body"></tbody>
+    </table>
+
+    <!-- 操作按钮 -->
+    <div class="actions">
+      <button onclick="exportToCSV()">导出 CSV</button>
+      <label class="file-label" for="csv-file">导入 CSV</label>
+      <input type="file" id="csv-file" class="file-input" accept=".csv" />
+    </div>
+
+    <div id="status-message"></div>
+
+    <!-- 导入说明 -->
+    <div class="import-section">
+      <p><strong>CSV 格式要求：</strong> 必须包含列：product_id, date_str, sales（示例）</p>
+      <pre>product_id,date_str,sales
+P123,2025-12-01,150
+P456,2025-12-01,200</pre>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://120.78.0.22:9999';
+
+    // 全局数据缓存
+    let allSales = [];
+
+    // 获取数据
+    async function fetchSales() {
+      try {
+        const product = document.getElementById('filter-product').value.trim();
+        const startDate = document.getElementById('filter-start-date').value;
+        const endDate = document.getElementById('filter-end-date').value;
+
+        let url = `${API_BASE}/sales/`;
+        const params = new URLSearchParams();
+
+        if (product) params.append('product_id', product);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+
+        if (params.toString()) url += '?' + params.toString();
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('获取数据失败');
+        const data = await res.json();
+        allSales = data;
+        renderTable(data);
+      } catch (err) {
+        showMessage('加载数据失败: ' + err.message, 'error');
+      }
+    }
+
+    // 渲染表格
+    function renderTable(data) {
+      const tbody = document.getElementById('sales-body');
+      const sortOrder = document.getElementById('sort-order').value;
+
+      // 排序
+      if (sortOrder === 'asc') {
+        data.sort((a, b) => a.sales - b.sales);
+      } else if (sortOrder === 'desc') {
+        data.sort((a, b) => b.sales - a.sales);
+      }
+
+      tbody.innerHTML = data.map(item => `
+        <tr>
+          <td>${item.id}</td>
+          <td>${item.product_id}</td>
+          <td>${item.date_str}</td>
+          <td>${item.sales}</td>
+        </tr>
+      `).join('');
+    }
+
+    // 导出 CSV
+    function exportToCSV() {
+      if (allSales.length === 0) {
+        showMessage('没有数据可导出', 'error');
+        return;
+      }
+
+      const headers = ['id', 'product_id', 'date_str', 'sales'];
+      const csvContent = [
+        headers.join(','),
+        ...allSales.map(row => 
+          headers.map(field => `"${String(row[field]).replace(/"/g, '""')}"`).join(',')
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_export_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 导入 CSV
+    document.getElementById('csv-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const text = event.target.result;
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          showMessage('CSV 文件格式无效', 'error');
+          return;
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const required = ['product_id', 'date_str', 'sales'];
+        if (!required.every(r => headers.includes(r))) {
+          showMessage('CSV 缺少必要列: product_id, date_str, sales', 'error');
+          return;
+        }
+
+        const records = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          const record = {};
+          headers.forEach((h, idx) => {
+            record[h] = values[idx] ? values[idx].trim().replace(/^"(.*)"$/, '$1') : '';
+          });
+          if (record.product_id && record.date_str && record.sales !== '') {
+            records.push(record);
+          }
+        }
+
+        // 批量上传
+        try {
+          for (const rec of records) {
+            const url = `${API_BASE}/sales/?product_id=${encodeURIComponent(rec.product_id)}&date_str=${encodeURIComponent(rec.date_str)}&sales=${encodeURIComponent(rec.sales)}`;
+            const res = await fetch(url, { method: 'POST' });
+            if (!res.ok) throw new Error(`导入失败: ${rec.product_id} ${rec.date_str}`);
+          }
+          showMessage(`成功导入 ${records.length} 条记录`, 'success');
+          fetchSales(); // 刷新
+        } catch (err) {
+          showMessage('导入过程中出错: ' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // 简单 CSV 行解析（支持带引号的字段）
+    function parseCSVLine(line) {
+      const values = [];
+      let inQuotes = false;
+      let current = '';
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          values.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current);
+      return values;
+    }
+
+    // 显示状态消息
+    function showMessage(text, type) {
+      const el = document.getElementById('status-message');
+      el.textContent = text;
+      el.className = 'status ' + type;
+      setTimeout(() => el.textContent = '', 5000);
+    }
+
+    // 页面加载时获取全部数据
+    window.onload = fetchSales;
+  </script>
+</body>
+</html>
