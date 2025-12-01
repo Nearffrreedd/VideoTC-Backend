@@ -7,22 +7,19 @@ from typing import List, Optional
 import database as models
 from database import SessionLocal, engine
 
-# 自动创建数据库表（首次运行时生效）
+# 自动创建数据库表
 models.Base.metadata.create_all(bind=engine)
 
-# 创建 FastAPI 应用实例（必须叫 app！）
 app = FastAPI(title="VideoTC Backend", description="电商销量数据 API")
 
-# 配置 CORS（允许前端跨域访问）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应替换为你的前端域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 数据库会话依赖
 def get_db():
     db = SessionLocal()
     try:
@@ -30,12 +27,9 @@ def get_db():
     finally:
         db.close()
 
-# 健康检查接口
 @app.get("/")
 def read_root():
     return {"status": "OK", "message": "VideoTC Backend is running!"}
-
-# ====== 销量数据 API ======
 
 @app.post("/sales/", summary="创建销量记录")
 def create_sale(
@@ -69,11 +63,9 @@ def read_sales(
 ):
     query = db.query(models.Sale)
 
-    # 按产品ID筛选
     if product_id:
         query = query.filter(models.Sale.product_id == product_id)
 
-    # 按开始日期筛选
     if start_date:
         try:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -81,7 +73,6 @@ def read_sales(
         except ValueError:
             raise HTTPException(status_code=400, detail="start_date 格式必须为 YYYY-MM-DD")
 
-    # 按结束日期筛选
     if end_date:
         try:
             end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
