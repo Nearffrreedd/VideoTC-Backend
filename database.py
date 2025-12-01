@@ -1,22 +1,25 @@
-# database.py
-from sqlalchemy import create_engine, Column, Integer, String, Date
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from datetime import date
+from fastapi import Query
+from sqlalchemy.orm import Session
+from typing import Optional
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./sales.db"
+@app.get("/sales/")
+def get_sales(
+    product_id: Optional[str] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Sales)
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+    if product_id:
+        query = query.filter(Sales.product_id == product_id)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    if start_date:
+        query = query.filter(Sales.date >= start_date)
 
-Base = declarative_base()
+    if end_date:
+        query = query.filter(Sales.date <= end_date)
 
-class Sale(Base):
-    __tablename__ = "sales"
-
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(String, index=True)
-    date = Column(Date, index=True)
-    sales = Column(Integer)
+    result = query.all()
+    return result
