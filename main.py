@@ -1,9 +1,9 @@
 # main.py
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import database as models
 from database import SessionLocal, engine
 
@@ -16,7 +16,7 @@ app = FastAPI(title="VideoTC Backend", description="电商销量数据 API")
 # 配置 CORS（允许前端跨域访问）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应替换为你的前端域名，如 ["https://your-frontend.com"]
+    allow_origins=["*"],  # 生产环境应替换为你的前端域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,27 +60,47 @@ def create_sale(
         "sales": db_sale.sales
     }
 
-@app.get("/sales/", summary="查询销量记录（可按日期筛选）")
-def read_sales(date_filter: str = None, db: Session = Depends(get_db)):
+@app.get("/sales/", summary="查询销量记录（支持产品ID、日期范围筛选）")
+def read_sales(
+    product_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     query = db.query(models.Sale)
-    if date_filter:
-        try:
-            date_obj = datetime.strptime(date_filter, "%Y-%m-%d").date()
-            query = query.filter(models.Sale.date == date_obj)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="日期格式必须为 YYYY-MM-DD")
-    results = query.all()
-    return [
-        {
-            "id": r.id,
-            "product_id": r.product_id,
-            "date": str(r.date),
-            "sales": r.sales
-        }
-        for r in results
-    ]
 
-@app.put("/sales/{sale_id}", summary="更新销量记录")
+    # 按产品ID筛选
+    if product_id:
+        query = query.filter(models.Sale.product_id == product_id)
+
+    # 按开始日期筛选
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(models.Sale.date >= start_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start_date 格式必须为 YYYY-MM-DD")
+
+    # 按结束日期筛选
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(models.Sale.date <= end_dt)
+        except ValueError:
+            # 自动创建数据库表（首次运行时生效） HTTPException(status_code=400, detail="end_date 格式必须为 YYYY-MM-DD")
+
+    results = query.all()
+    # 创建 FastAPI 应用实例（必须叫 app！） [
+
+            "id": r.id,
+            # 配置 CORS（允许前端跨域访问）: r.product_id,
+应用程序。添加中间件: ((r.date),
+    CORS中间件"sales": r.sales
+
+    允许凭证=真,in results
+
+
+)app.put("/sales/{sale_id}", summary="更新销量记录")
 def update_sale(
     sale_id: int,
     product_id: str = None,
